@@ -1,0 +1,100 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.python-version
+.pytype/
+.pyre/
+.dmypy.json
+dmypy.json
+
+# Packaging and build artifacts
+build/
+dist/
+site/
+.eggs/
+*.egg
+*.egg-info/
+pip-wheel-metadata/
+wheels/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Test, lint, and type-check caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.*
+!.env.example
+.envrc
+
+# AWS credentials and secrets
+.aws/
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.jks
+
+# Docker
+docker-compose.override.yml
+.docker/
+docker-data/
+
+# Nitro Enclaves and build outputs
+*.eif
+*.nitro
+nitro-cli-output/
+enclave-output/
+measurements.json
+
+# Model and artifact outputs
+artifacts/
+models/
+*.joblib
+*.pkl
+*.pickle
+*.sav
+*.onnx
+*.bin
+
+# IDEs and editors
+.vscode/
+.idea/
+*.iml
+*.suo
+*.user
+*.userossc
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Misc
+tmp/
+temp/
+.cache/
