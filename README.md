@@ -1,48 +1,58 @@
 # Confidential ML Feature Store with Hardware-Isolated Inference
 
-A multi-tenant feature store scaffold built with FastAPI and AWS Nitro Enclaves to protect model-serving secrets and keep inference workloads isolated from the host operating system.
+A multi-tenant online feature store built with FastAPI and DynamoDB, designed as the foundation for attested, hardware-isolated inference with AWS Nitro Enclaves.
 
 ![Architecture diagram placeholder](architecture.png)
 
 ## Overview
 
-This repository contains the project skeleton for a confidential machine learning serving platform. The application surface, enclave boundary, documentation, scripts, and configuration templates are in place, while business logic and enclave RPC implementation are intentionally deferred to later phases.
+Phase 1 delivers a working feature-store core:
+
+- tenant-scoped feature-set CRUD over FastAPI
+- tenant authentication via `X-Tenant-ID` and `X-API-Key`
+- strict tenant isolation at the API and service layers
+- DynamoDB-backed persistence with partitioning by `tenant_id`
+- a health endpoint with DynamoDB connectivity checks
+- a test suite that runs fully offline with moto
+
+The Nitro Enclaves and KMS integration boundaries remain in the repository and will be expanded in a later phase for confidential inference.
 
 ## Why This Project
 
 Machine learning model weights are valuable intellectual property. In many traditional serving architectures, those weights are loaded into processes that run directly on the host operating system, which means a host compromise can expose model artifacts, decrypted keys, or inference internals.
 
-This project explores a stronger trust boundary:
+This project moves toward a stronger trust boundary:
 
-- The host API receives tenant requests and orchestrates feature access.
-- Sensitive inference runs inside an AWS Nitro Enclave.
-- AWS KMS access is intended to be gated by enclave attestation measurements.
-- The host communicates with the enclave over vsock RPC rather than loading protected model material directly.
+- the host API receives tenant requests and orchestrates feature access
+- DynamoDB stores tenant-scoped online features
+- sensitive inference is intended to run inside an AWS Nitro Enclave
+- AWS KMS access is intended to be gated by enclave attestation measurements
+- the host communicates with the enclave over vsock rather than loading protected model material directly
 
-The goal is to demonstrate how hardware-isolated inference can reduce exposure for model weights, encryption keys, and tenant-sensitive inference paths.
+The result is a feature-store architecture that can support confidential model serving while already enforcing strong tenant ownership at the storage and API layers.
 
 ## Feature List
 
-- **FastAPI service scaffold**  
-  Structured API layout for feature ingestion, retrieval, inference triggers, and health checks.
+- **Tenant-scoped feature CRUD**  
+  Create, read, list, and delete feature sets for the authenticated tenant.
 
-- **Nitro Enclave integration boundary**  
-  Dedicated enclave-side module layout for attestation, model loading, KMS interaction, and vsock RPC handling.
+- **Header-based tenant authentication**  
+  Requests must include `X-Tenant-ID` and `X-API-Key`, which are validated against stored tenant records.
 
-- **Attestation-aware KMS design**  
-  Config and script scaffolding for binding cryptographic operations to enclave PCR measurements.
+- **Tenant isolation enforcement**  
+  A tenant cannot read, list, or delete another tenant's feature sets, even if they try to override tenant identifiers in requests.
 
-- **Tenant isolation hooks**  
-  Middleware and request models organized around per-tenant access boundaries.
+- **DynamoDB-backed persistence**  
+  Feature sets are stored under a composite key of `tenant_id` and `resource_id`.
 
-- **DynamoDB-backed feature store layout**  
-  Service and provisioning script placeholders for tenant-scoped feature persistence.
+- **Health and readiness checks**  
+  `/health` reports service version and DynamoDB connectivity.
 
-- **Security-focused project documentation**  
-  Architecture, AWS setup, and security model documents included from day one.
+- **Inference preparation hooks**  
+  The service layer can prepare deterministic feature vectors for the future enclave-backed inference pipeline.
 
-- **Test scaffold**  
-  Pytest structure covering API wiring, tenant-boundary enforcement, enclave client contracts, and attestation integration points.
+- **Confidential-computing integration boundary**  
+  Enclave, attestation, KMS, and vsock modules remain in place for the next implementation phase.
 
 ## Tech Stack
 
@@ -50,18 +60,18 @@ The goal is to demonstrate how hardware-isolated inference can reduce exposure f
 | --- | --- |
 | Python 3.11+ | Application and enclave-side implementation language |
 | FastAPI | Host-side API framework |
+| AWS DynamoDB | Tenant-scoped online feature storage |
 | AWS EC2 with Nitro Enclaves | Hardware-isolated execution environment for sensitive inference |
 | AWS KMS | Attestation-aware decryption and key policy enforcement |
-| DynamoDB | Tenant-scoped online feature storage |
 | vsock RPC | Host-to-enclave communication channel |
 | scikit-learn | Model loading and inference runtime inside the enclave |
-| Docker | Enclave image build source and local development container runtime |
-| pytest | Test runner for API, service, and isolation checks |
-| moto | AWS mocking strategy for later unit and integration phases |
+| Docker | Local development and enclave image builds |
+| pytest | Test runner for API and service validation |
+| moto | Offline AWS mocking for test execution |
 
 ## Quick Start
 
-Local development focuses on the API scaffold and DynamoDB Local. It does not emulate Nitro Enclaves or attested KMS flows.
+Local development uses Docker Compose plus DynamoDB Local.
 
 ### 1. Copy the environment template
 
@@ -75,10 +85,21 @@ cp .env.example .env
 docker compose up --build
 ```
 
-### 3. Verify the API is up
+### 3. Create the local DynamoDB table
+
+Run the setup script against the host-mapped DynamoDB Local port:
 
 ```bash
-curl http://localhost:8000/healthz
+AWS_REGION=us-east-1 \
+DYNAMODB_TABLE_NAME=confidential-ml-feature-store \
+DYNAMODB_ENDPOINT=http://localhost:8001 \
+./scripts/setup_dynamodb.sh
+```
+
+### 4. Verify service health
+
+```bash
+curl http://localhost:8000/health
 ```
 
 Expected response:
@@ -86,22 +107,57 @@ Expected response:
 ```json
 {
   "status": "ok",
-  "service": "feature-store-api",
-  "environment": "local"
+  "version": "0.1.0",
+  "dynamodb": {
+    "reachable": true,
+    "table_name": "confidential-ml-feature-store"
+  }
 }
 ```
 
-### 4. Open API docs
+### 5. Create a tenant-scoped feature set
+
+The API expects a tenant record to exist in DynamoDB. In automated tests, tenants are seeded by fixtures. For local manual testing, seed a tenant record first, then call the API with the corresponding headers.
+
+### 6. Open API docs
 
 ```text
 http://localhost:8000/docs
 ```
 
-### Notes
+## API Surface
 
-- `GET /healthz` is implemented as a basic scaffold health endpoint.
-- Feature and inference endpoints are wired but intentionally return `501 Not Implemented` until application logic is added.
-- DynamoDB Local runs in Docker for local-only persistence testing.
+### Working Phase 1 routes
+
+- `GET /health` — service status and DynamoDB connectivity
+- `POST /features/` — create a tenant-owned feature set
+- `GET /features/` — list feature sets for the authenticated tenant
+- `GET /features/{feature_set_name}` — fetch a tenant-owned feature set
+- `DELETE /features/{feature_set_name}` — delete a tenant-owned feature set
+
+### Authentication headers
+
+All feature routes require:
+
+- `X-Tenant-ID`
+- `X-API-Key`
+
+### Example create request
+
+```bash
+curl -X POST http://localhost:8000/features/ \
+  -H "Content-Type: application/json" \
+  -H "X-Tenant-ID: tenant-a" \
+  -H "X-API-Key: tenant-a-api-key" \
+  -d '{
+    "tenant_id": "tenant-a",
+    "feature_set_name": "customer-profile",
+    "features": {
+      "age": 34.0,
+      "balance": 1200.5
+    }
+  }'
+```
 
 ## AWS Deployment
 
@@ -109,51 +165,49 @@ Deployment and environment preparation steps are documented in [docs/SETUP_AWS.m
 
 That guide covers:
 
-- Parent instance preparation for Nitro Enclaves
-- Enclave image builds and PCR capture
+- parent instance preparation for Nitro Enclaves
+- enclave image builds and PCR capture
 - KMS key policy setup for attested decrypt flows
-- DynamoDB table creation
-- Host and enclave process startup sequence
+- DynamoDB table creation using the Phase 1 schema
+- host API startup and validation
 
 ## Security Model
 
 A summarized security model is available in [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md).
 
-At a high level, this design aims to:
+At a high level, the current implementation already enforces:
 
-- Keep protected model material out of the host API process
-- Restrict KMS access to attested enclave workloads
-- Preserve tenant boundaries at the API layer
-- Minimize trust in the parent instance during inference execution
+- API-key-based tenant authentication
+- strict tenant ownership checks before all feature operations
+- tenant partitioning in DynamoDB
+- denial of cross-tenant read, list, and delete attempts
+
+The next phase extends that foundation into enclave-backed inference and attestation-aware cryptographic access.
 
 ## Testing
 
-Run the test suite with:
+Run the full test suite with:
 
 ```bash
 make test
 ```
 
-Or directly:
+Run linting and type checks with:
 
 ```bash
-pytest
+make lint
 ```
 
-The current scaffold tests cover:
+The Phase 1 test suite covers:
 
-- API health route availability
-- Placeholder feature CRUD endpoint wiring
-- Placeholder inference endpoint wiring
-- Tenant isolation middleware behavior
-- Enclave client and KMS service skeleton contracts
+- feature-set create, read, list, and delete behavior
+- tenant isolation enforcement
+- invalid API key rejection
+- missing-header rejection
+- cross-tenant attack attempts against read, list, and delete paths
+- health endpoint behavior under a moto-backed DynamoDB table
 
-As implementation is added, this suite can expand into:
-
-- moto-backed DynamoDB tests
-- attestation policy validation tests
-- end-to-end host-to-enclave RPC tests
-- inference correctness and regression tests
+Tests run without external AWS dependencies by using moto to mock DynamoDB.
 
 ## Project Structure
 

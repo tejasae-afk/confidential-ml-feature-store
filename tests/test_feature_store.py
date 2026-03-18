@@ -13,7 +13,11 @@ def test_feature_store_crud_flow(client, tenant_a_headers) -> None:
         "features": {"age": 34.0, "balance": 1200.5},
     }
 
-    create_response = client.post("/features/", json=create_payload, headers=tenant_a_headers)
+    create_response = client.post(
+        "/features/",
+        json=create_payload,
+        headers=tenant_a_headers,
+    )
     assert create_response.status_code == status.HTTP_201_CREATED
     created = create_response.json()
     assert created["tenant_id"] == "tenant-a"
@@ -41,14 +45,22 @@ def test_feature_store_crud_flow(client, tenant_a_headers) -> None:
     assert missing_response.json()["error"] == "feature_set_not_found"
 
 
-def test_tenant_isolation_prevents_cross_tenant_reads(client, tenant_a_headers, tenant_b_headers) -> None:
+def test_tenant_isolation_prevents_cross_tenant_reads(
+    client,
+    tenant_a_headers,
+    tenant_b_headers,
+) -> None:
     """Tenant B cannot access tenant A resources by specifying tenant A explicitly."""
     create_payload = {
         "tenant_id": "tenant-a",
         "feature_set_name": "risk-features",
         "features": {"risk_score": 0.84},
     }
-    create_response = client.post("/features/", json=create_payload, headers=tenant_a_headers)
+    create_response = client.post(
+        "/features/",
+        json=create_payload,
+        headers=tenant_a_headers,
+    )
     assert create_response.status_code == status.HTTP_201_CREATED
 
     cross_tenant_response = client.get(

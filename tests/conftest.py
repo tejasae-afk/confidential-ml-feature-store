@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Generator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import boto3
 import pytest
@@ -66,7 +66,7 @@ def tenant_a() -> Tenant:
     return Tenant(
         tenant_id="tenant-a",
         api_key="tenant-a-api-key",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         is_active=True,
         allowed_models=["fraud-model", "churn-model"],
     )
@@ -78,7 +78,7 @@ def tenant_b() -> Tenant:
     return Tenant(
         tenant_id="tenant-b",
         api_key="tenant-b-api-key",
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
         is_active=True,
         allowed_models=["fraud-model"],
     )

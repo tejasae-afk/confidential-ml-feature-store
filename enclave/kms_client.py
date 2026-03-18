@@ -11,7 +11,13 @@ class EnclaveKMSClient:
         self.region = region
 
     def decrypt_ciphertext(self, ciphertext_blob: bytes) -> bytes:
-        raise NotImplementedError("Enclave-side KMS decrypt logic is not implemented in the scaffold phase.")
+        """Decrypt ciphertext using enclave-attested KMS access."""
+        raise NotImplementedError(
+            "Enclave-side KMS decrypt logic is not implemented in the scaffold phase.",
+        )
 
     def generate_data_key(self) -> tuple[bytes, bytes]:
-        raise NotImplementedError("Enclave-side KMS data key generation is not implemented in the scaffold phase.")
+        """Generate a data key from inside the enclave."""
+        raise NotImplementedError(
+            "Enclave-side KMS data key generation is not implemented in the scaffold phase.",
+        )

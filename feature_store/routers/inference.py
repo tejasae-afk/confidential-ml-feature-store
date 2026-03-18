@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, status
 
 from feature_store.middleware.tenant_auth import get_current_tenant
 from feature_store.models.feature_schemas import InferenceRequest, InferenceResponse

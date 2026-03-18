@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 
 @dataclass(slots=True)
@@ -23,4 +23,7 @@ class AttestationProvider:
         user_data: bytes | None = None,
         nonce: bytes | None = None,
     ) -> AttestationBundle:
-        raise NotImplementedError("NSM attestation generation is not implemented in the scaffold phase.")
+        """Create an attestation document for enclave identity verification."""
+        raise NotImplementedError(
+            "NSM attestation generation is not implemented in the scaffold phase.",
+        )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from secrets import compare_digest
 from typing import Annotated
 
 from fastapi import Header, Request
@@ -30,21 +31,24 @@ async def get_current_tenant(
     Raises:
         UnauthorizedAccess: If credentials are missing or invalid.
     """
-    if not x_tenant_id or not x_api_key:
+    normalized_tenant_id = (x_tenant_id or "").strip()
+    provided_api_key = (x_api_key or "").strip()
+
+    if not normalized_tenant_id or not provided_api_key:
         raise UnauthorizedAccess(
             "Missing required authentication headers: X-Tenant-ID and X-API-Key.",
         )
 
     dynamo_service = _get_dynamo_service(request)
     try:
-        tenant = dynamo_service.get_tenant_record(x_tenant_id.strip())
+        tenant = dynamo_service.get_tenant_record(normalized_tenant_id)
     except TenantNotFound as exc:
         raise UnauthorizedAccess("Invalid tenant credentials.") from exc
 
     if not tenant.is_active:
         raise UnauthorizedAccess("Tenant account is inactive.")
 
-    if tenant.api_key != x_api_key.strip():
+    if not compare_digest(tenant.api_key, provided_api_key):
         raise UnauthorizedAccess("Invalid tenant credentials.")
 
     request.state.tenant = tenant
@@ -74,4 +78,5 @@ def _get_dynamo_service(request: Request) -> DynamoDBService:
     Returns:
         The configured ``DynamoDBService``.
     """
-    return request.app.state.dynamo_service  # type: ignore[no-any-return]
+    dynamo_service: DynamoDBService = request.app.state.dynamo_service
+    return dynamo_service

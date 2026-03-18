@@ -10,10 +10,26 @@ class KMSService:
         self.key_id = key_id
 
     def validate_attestation_document(self, attestation_document: bytes) -> None:
-        raise NotImplementedError("Attestation validation is not implemented in the scaffold phase.")
+        """Validate an enclave attestation document before privileged operations."""
+        raise NotImplementedError(
+            "Attestation validation is not implemented in the scaffold phase.",
+        )
 
-    def decrypt_ciphertext(self, ciphertext_blob: bytes, attestation_document: bytes | None = None) -> bytes:
-        raise NotImplementedError("KMS decrypt integration is not implemented in the scaffold phase.")
+    def decrypt_ciphertext(
+        self,
+        ciphertext_blob: bytes,
+        attestation_document: bytes | None = None,
+    ) -> bytes:
+        """Decrypt ciphertext using KMS with optional enclave attestation context."""
+        raise NotImplementedError(
+            "KMS decrypt integration is not implemented in the scaffold phase.",
+        )
 
-    def generate_data_key(self, attestation_document: bytes | None = None) -> tuple[bytes, bytes]:
-        raise NotImplementedError("KMS data key generation is not implemented in the scaffold phase.")
+    def generate_data_key(
+        self,
+        attestation_document: bytes | None = None,
+    ) -> tuple[bytes, bytes]:
+        """Generate a data key for protected material workflows."""
+        raise NotImplementedError(
+            "KMS data key generation is not implemented in the scaffold phase.",
+        )

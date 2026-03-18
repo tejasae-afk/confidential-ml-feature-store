@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from decimal import Decimal
 from time import sleep
-from typing import Any, Final, Sequence, cast
+from typing import Any, Final, cast
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
@@ -100,7 +101,7 @@ class DynamoDBService:
             FeatureSetConflict: If the feature set already exists for the tenant.
             DataStoreError: If DynamoDB returns an unexpected error.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         item = {
             "tenant_id": feature_set.tenant_id,
             "resource_id": self._feature_resource_id(feature_set.feature_set_name),
@@ -225,7 +226,9 @@ class DynamoDBService:
         except ClientError as exc:
             error_code = exc.response.get("Error", {}).get("Code")
             if error_code == "ConditionalCheckFailedException":
-                raise FeatureSetNotFound(f"Feature set '{feature_set_name}' was not found.") from exc
+                raise FeatureSetNotFound(
+                    f"Feature set '{feature_set_name}' was not found.",
+                ) from exc
             logger.exception("Failed to delete feature set")
             raise DataStoreError("Failed to delete feature set.") from exc
         except BotoCoreError as exc:
@@ -331,7 +334,7 @@ class DynamoDBService:
         return Tenant(
             tenant_id=cast(str, item["tenant_id"]),
             api_key=cast(str, item["api_key"]),
-            created_at=cast(str, item["created_at"]),
+            created_at=self._parse_datetime(item["created_at"]),
             is_active=bool(item.get("is_active", True)),
             allowed_models=list(item.get("allowed_models", [])),
         )
@@ -373,8 +376,8 @@ class DynamoDBService:
             tenant_id=cast(str, item["tenant_id"]),
             feature_set_name=cast(str, item["feature_set_name"]),
             features=cast(dict[str, float], self._from_decimal(item["features"])),
-            created_at=cast(str, item["created_at"]),
-            updated_at=cast(str, item["updated_at"]),
+            created_at=self._parse_datetime(item["created_at"]),
+            updated_at=self._parse_datetime(item["updated_at"]),
             version=int(item["version"]),
         )
 
@@ -387,10 +390,27 @@ class DynamoDBService:
         Returns:
             A plain-Python representation of the item.
         """
-        return {
-            key: self._deserializer.deserialize(value)
-            for key, value in item.items()
-        }
+        return {key: self._deserializer.deserialize(value) for key, value in item.items()}
+
+    def _parse_datetime(self, value: Any) -> datetime:
+        """Parse an ISO-8601 datetime string from DynamoDB.
+
+        Args:
+            value: Raw DynamoDB attribute value.
+
+        Returns:
+            A timezone-aware ``datetime`` value.
+
+        Raises:
+            DataStoreError: If the timestamp cannot be parsed.
+        """
+        if isinstance(value, datetime):
+            return value
+
+        try:
+            return datetime.fromisoformat(cast(str, value))
+        except (TypeError, ValueError) as exc:
+            raise DataStoreError("Stored timestamp is invalid.") from exc
 
     def _to_decimal(self, value: Any) -> Any:
         """Recursively convert floats to ``Decimal`` for DynamoDB.

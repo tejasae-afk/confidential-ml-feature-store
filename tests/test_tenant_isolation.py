@@ -5,7 +5,11 @@ from __future__ import annotations
 from fastapi import status
 
 
-def test_cross_tenant_read_attempt_returns_403(client, tenant_a_headers, tenant_b_headers) -> None:
+def test_cross_tenant_read_attempt_returns_403(
+    client,
+    tenant_a_headers,
+    tenant_b_headers,
+) -> None:
     """Tenant B cannot read tenant A's feature set when tenant A is specified."""
     payload = {
         "tenant_id": "tenant-a",
@@ -26,7 +30,11 @@ def test_cross_tenant_read_attempt_returns_403(client, tenant_a_headers, tenant_
     assert body["detail"] == "Tenant is not authorized to access the requested resource."
 
 
-def test_cross_tenant_delete_attempt_returns_403(client, tenant_a_headers, tenant_b_headers) -> None:
+def test_cross_tenant_delete_attempt_returns_403(
+    client,
+    tenant_a_headers,
+    tenant_b_headers,
+) -> None:
     """Tenant B cannot delete tenant A's feature set when tenant A is specified."""
     payload = {
         "tenant_id": "tenant-a",
@@ -47,7 +55,11 @@ def test_cross_tenant_delete_attempt_returns_403(client, tenant_a_headers, tenan
     assert body["detail"] == "Tenant is not authorized to access the requested resource."
 
 
-def test_cross_tenant_list_attempt_returns_403(client, tenant_a_headers, tenant_b_headers) -> None:
+def test_cross_tenant_list_attempt_returns_403(
+    client,
+    tenant_a_headers,
+    tenant_b_headers,
+) -> None:
     """Tenant B cannot list tenant A's feature sets when tenant A is specified."""
     payload = {
         "tenant_id": "tenant-a",

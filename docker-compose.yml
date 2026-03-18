@@ -19,31 +19,25 @@ services:
         "pip install --upgrade pip && pip install -r requirements.txt && uvicorn feature_store.main:app --host 0.0.0.0 --port 8000 --reload"
       ]
     environment:
-      APP_NAME: ${APP_NAME:-Confidential ML Feature Store}
-      APP_ENV: ${APP_ENV:-local}
-      API_HOST: ${API_HOST:-0.0.0.0}
-      API_PORT: ${API_PORT:-8000}
-      LOG_LEVEL: ${LOG_LEVEL:-INFO}
       AWS_REGION: ${AWS_REGION:-us-east-1}
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-dummy}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-dummy}
-      DYNAMODB_TABLE: ${DYNAMODB_TABLE:-confidential-ml-features}
-      DYNAMODB_ENDPOINT_URL: ${DYNAMODB_ENDPOINT_URL:-http://dynamodb-local:8000}
-      DYNAMODB_BILLING_MODE: ${DYNAMODB_BILLING_MODE:-PAY_PER_REQUEST}
-      KMS_KEY_ID: ${KMS_KEY_ID:-local-placeholder-key}
+      DYNAMODB_TABLE_NAME: ${DYNAMODB_TABLE_NAME:-confidential-ml-feature-store}
+      DYNAMODB_ENDPOINT: ${DYNAMODB_ENDPOINT:-http://dynamodb-local:8000}
+      KMS_KEY_ID: ${KMS_KEY_ID:-local-placeholder-kms-key}
       ENCLAVE_CID: ${ENCLAVE_CID:-16}
       ENCLAVE_PORT: ${ENCLAVE_PORT:-5005}
-      ENCLAVE_TIMEOUT_SECONDS: ${ENCLAVE_TIMEOUT_SECONDS:-5.0}
-      MODEL_ARTIFACT_PATH: ${MODEL_ARTIFACT_PATH:-artifacts/model.joblib}
-      TENANT_HEADER_NAME: ${TENANT_HEADER_NAME:-X-Tenant-ID}
-      REQUEST_ID_HEADER_NAME: ${REQUEST_ID_HEADER_NAME:-X-Request-ID}
-      ATTESTATION_REQUIRED: ${ATTESTATION_REQUIRED:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      AWS_ACCESS_KEY_ID: dummy
+      AWS_SECRET_ACCESS_KEY: dummy
     ports:
       - "8000:8000"
     volumes:
       - ./:/app
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')\""]
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()\""
+        ]
       interval: 30s
       timeout: 5s
       retries: 5

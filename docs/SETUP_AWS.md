@@ -1,6 +1,6 @@
 # AWS Setup Guide
 
-This document describes the intended AWS deployment flow for the project. The repository currently ships as a scaffold, so these steps prepare the environment and infrastructure boundaries even though core application logic is still pending.
+This document describes the intended AWS deployment flow for the current repository state. Phase 1 includes a working, tenant-isolated feature-store core backed by DynamoDB, while enclave inference, attestation, and KMS recipient flows remain reserved for later phases.
 
 ## Prerequisites
 
@@ -32,6 +32,16 @@ cp .env.example .env
 ```
 
 Update `.env` with your AWS region, table name, KMS key information, and enclave runtime settings.
+
+The Phase 1 application reads the following core variables from `.env`:
+
+- `AWS_REGION`
+- `DYNAMODB_TABLE_NAME`
+- `DYNAMODB_ENDPOINT`
+- `KMS_KEY_ID`
+- `ENCLAVE_CID`
+- `ENCLAVE_PORT`
+- `LOG_LEVEL`
 
 ## 3. Install local Python dependencies
 
@@ -76,9 +86,9 @@ export KMS_ALLOWED_ROLE_ARN=arn:aws:iam::<account-id>:role/<host-api-role>
 
 The generated policy is designed to:
 
-- Keep administrative control in the owning AWS account
-- Allow cryptographic operations only for the intended principal
-- Bind usage to enclave attestation measurements
+- keep administrative control in the owning AWS account
+- allow cryptographic operations only for the intended principal
+- bind usage to enclave attestation measurements
 
 If you plan to require additional PCR constraints such as `PCR1`, `PCR2`, or `PCR8`, extend the policy before using the key in production.
 
@@ -88,9 +98,32 @@ If you plan to require additional PCR constraints such as `PCR1`, `PCR2`, or `PC
 ./scripts/setup_dynamodb.sh
 ```
 
-The initial scaffold uses a simple composite primary key layout suitable for tenant- and entity-scoped feature records.
+Phase 1 uses this composite primary key layout:
 
-## 7. Launch the enclave
+- partition key: `tenant_id`
+- sort key: `resource_id`
+
+Feature-set items use a `FEATURE_SET#` prefix in `resource_id`, and tenant records use a `TENANT#` prefix.
+
+## 7. Seed tenant records
+
+Feature routes require valid tenant credentials stored in DynamoDB. Seed at least one tenant record before calling the authenticated API.
+
+Required tenant item shape:
+
+```json
+{
+  "tenant_id": "tenant-a",
+  "resource_id": "TENANT#tenant-a",
+  "entity_type": "TENANT",
+  "api_key": "tenant-a-api-key",
+  "created_at": "2026-03-17T00:00:00+00:00",
+  "is_active": true,
+  "allowed_models": ["fraud-model"]
+}
+```
+
+## 8. Launch the enclave
 
 After the EIF is built and Nitro Enclaves resources are preallocated on the parent instance, run the enclave:
 
@@ -106,7 +139,7 @@ nitro-cli describe-enclaves
 
 If debug mode is enabled, you can inspect the enclave console with Nitro CLI. Use debug mode only for development, because attestation measurements differ from production expectations.
 
-## 8. Start the host API
+## 9. Start the host API
 
 ```bash
 source .venv/bin/activate
@@ -115,28 +148,31 @@ uvicorn feature_store.main:app --host 0.0.0.0 --port 8000
 
 At this stage:
 
-- `/healthz` should respond successfully
-- Feature and inference routes are scaffolded
-- Service implementations for DynamoDB, KMS, and vsock RPC are still intentionally incomplete
+- `/health` should respond successfully
+- `/features/` and `/features/{feature_set_name}` are operational for authenticated tenants
+- the service validates `X-Tenant-ID` and `X-API-Key` against stored tenant records
+- the inference route remains a placeholder until the enclave-serving phase is implemented
 
-## 9. Validate the environment
+## 10. Validate the environment
 
 Deployment validation checklist:
 
 1. The parent instance has Nitro Enclaves enabled.
 2. The enclave is visible in `nitro-cli describe-enclaves`.
 3. The recorded PCR values match the ones configured for KMS access.
-4. The DynamoDB table exists in the target region.
-5. The FastAPI service can start with the configured environment.
-6. The health route responds from the host API.
+4. The DynamoDB table exists in the target region with `tenant_id` and `resource_id` as keys.
+5. Tenant records exist for any tenants you want to authenticate.
+6. The FastAPI service can start with the configured environment.
+7. The `/health` route responds from the host API.
+8. Authenticated feature CRUD requests succeed for the owning tenant and fail for cross-tenant access attempts.
 
 ## Troubleshooting Notes
 
-### EIF build issues
+### DynamoDB schema issues
 
-- Confirm Docker is running.
-- Confirm Nitro CLI is installed.
-- Confirm the build uses a Linux environment.
+- Confirm the table uses `tenant_id` as the partition key.
+- Confirm the table uses `resource_id` as the sort key.
+- Confirm you are writing feature sets with the `FEATURE_SET#` prefix and tenant records with the `TENANT#` prefix.
 
 ### KMS permission issues
 

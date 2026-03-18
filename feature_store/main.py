@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 from uuid import uuid4
 
 from fastapi import FastAPI, Request, Response
@@ -88,9 +88,12 @@ def create_app() -> FastAPI:
             tenant_id=request.headers.get("X-Tenant-ID"),
         )
 
-        response: Response = await call_next(request)
+        try:
+            response: Response = await call_next(request)
+        finally:
+            clear_log_context()
+
         response.headers[_REQUEST_ID_HEADER] = request_id
-        clear_log_context()
         return response
 
     app.include_router(health.router)

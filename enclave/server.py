@@ -16,7 +16,10 @@ class VsockRPCServer:
     port: int
 
     def serve(self) -> None:
-        raise NotImplementedError("Enclave vsock RPC server implementation is not available in the scaffold phase.")
+        """Start accepting requests inside the enclave."""
+        raise NotImplementedError(
+            "Enclave vsock RPC server implementation is not available in the scaffold phase.",
+        )
 
 
 def main() -> None:

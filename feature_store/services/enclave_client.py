@@ -15,10 +15,19 @@ class EnclaveClient:
         self.timeout_seconds = timeout_seconds
 
     def ping(self) -> bool:
-        raise NotImplementedError("Enclave health probing is not implemented in the scaffold phase.")
+        """Check whether the enclave is reachable."""
+        raise NotImplementedError(
+            "Enclave health probing is not implemented in the scaffold phase.",
+        )
 
     def send_request(self, payload: Mapping[str, Any]) -> dict[str, Any]:
-        raise NotImplementedError("vsock RPC request handling is not implemented in the scaffold phase.")
+        """Send a raw RPC payload to the enclave."""
+        raise NotImplementedError(
+            "vsock RPC request handling is not implemented in the scaffold phase.",
+        )
 
     def predict(self, payload: Mapping[str, Any]) -> dict[str, Any]:
-        raise NotImplementedError("Enclave prediction calls are not implemented in the scaffold phase.")
+        """Submit an inference request to the enclave."""
+        raise NotImplementedError(
+            "Enclave prediction calls are not implemented in the scaffold phase.",
+        )

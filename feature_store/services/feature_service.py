@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
 
 from fastapi import Request
 
@@ -140,7 +140,14 @@ class FeatureService:
             raise FeatureSetNotFound(
                 f"Feature set '{request_payload.feature_set_name}' has no features.",
             )
-        return [value for _, value in sorted(feature_set.features.items(), key=lambda item: item[0])]
+
+        return [
+            value
+            for _, value in sorted(
+                feature_set.features.items(),
+                key=lambda item: item[0],
+            )
+        ]
 
     def prepare_batch_feature_vectors(
         self,
@@ -160,10 +167,17 @@ class FeatureService:
             A mapping of feature-set name to deterministic feature vector.
         """
         self._ensure_tenant_access(authenticated_tenant.tenant_id, tenant_id)
-        feature_sets = self._dynamo_service.batch_get_feature_sets(tenant_id, feature_set_names)
+        feature_sets = self._dynamo_service.batch_get_feature_sets(
+            tenant_id,
+            feature_set_names,
+        )
         return {
             feature_set.feature_set_name: [
-                value for _, value in sorted(feature_set.features.items(), key=lambda item: item[0])
+                value
+                for _, value in sorted(
+                    feature_set.features.items(),
+                    key=lambda item: item[0],
+                )
             ]
             for feature_set in feature_sets
         }
@@ -194,4 +208,5 @@ def get_feature_service(request: Request) -> FeatureService:
     Returns:
         The configured ``FeatureService`` instance.
     """
-    return request.app.state.feature_service  # type: ignore[no-any-return]
+    feature_service: FeatureService = request.app.state.feature_service
+    return feature_service

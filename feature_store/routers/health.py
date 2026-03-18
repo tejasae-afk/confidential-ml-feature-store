@@ -31,7 +31,7 @@ async def health(request: Request) -> HealthCheckResponse:
     Returns:
         A health summary.
     """
-    dynamo_service: DynamoDBService = request.app.state.dynamo_service  # type: ignore[assignment]
+    dynamo_service: DynamoDBService = request.app.state.dynamo_service
     reachable = dynamo_service.check_connectivity()
     return HealthCheckResponse(
         status="ok" if reachable else "degraded",

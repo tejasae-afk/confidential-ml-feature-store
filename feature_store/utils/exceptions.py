@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -100,7 +100,7 @@ def _error_payload(request: Request, error_code: str, detail: str) -> dict[str, 
         "error": error_code,
         "detail": detail,
         "request_id": getattr(request.state, "request_id", None),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
