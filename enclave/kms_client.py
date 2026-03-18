@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol
 
 from botocore.exceptions import BotoCoreError, ClientError
+
 from enclave.attestation import get_attestation_document
 
 _RECIPIENT_KEY_ENCRYPTION_ALGORITHM = "RSAES_OAEP_SHA_256"

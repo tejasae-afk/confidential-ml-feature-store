@@ -3,3 +3,4 @@ boto3==1.42.69
 pydantic==2.12.5
 scikit-learn==1.8.0
 joblib==1.5.3
+cryptography==46.0.4

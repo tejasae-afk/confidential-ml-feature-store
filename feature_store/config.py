@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     enclave_cid: int = Field(default=16, alias="ENCLAVE_CID")
     enclave_port: int = Field(default=5005, alias="ENCLAVE_PORT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+    use_mock_enclave: bool = Field(default=False, alias="USE_MOCK_ENCLAVE")
 
     model_config = SettingsConfigDict(
         env_file=".env",

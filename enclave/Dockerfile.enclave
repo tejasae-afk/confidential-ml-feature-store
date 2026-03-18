@@ -1,14 +1,56 @@
-FROM python:3.11-slim
+FROM amazonlinux:2 AS python-builder
 
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
+ARG PYTHON_VERSION=3.11.13
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+RUN yum update -y && \
+    yum install -y \
+      gcc \
+      make \
+      wget \
+      tar \
+      gzip \
+      bzip2-devel \
+      libffi-devel \
+      openssl11-devel \
+      sqlite-devel \
+      xz-devel \
+      zlib-devel && \
+    yum clean all && rm -rf /var/cache/yum
+
+WORKDIR /tmp
+RUN wget -O Python.tgz "https://www.python.org/ftp/python/${PYTHON_VERSION}/Python-${PYTHON_VERSION}.tgz" && \
+    tar -xzf Python.tgz && \
+    cd "Python-${PYTHON_VERSION}" && \
+    ./configure --prefix=/opt/python311 --enable-optimizations --with-ensurepip=install && \
+    make -j"$(nproc)" && \
+    make altinstall && \
+    /opt/python311/bin/python3.11 -m pip install --upgrade pip setuptools wheel
+
+FROM amazonlinux:2
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/python311/bin:${PATH}"
+
+RUN yum update -y && \
+    yum install -y \
+      bzip2-libs \
+      libffi \
+      openssl11-libs \
+      sqlite \
+      xz-libs \
+      zlib && \
+    yum clean all && rm -rf /var/cache/yum
+
+COPY --from=python-builder /opt/python311 /opt/python311
 
 WORKDIR /app
-
 COPY enclave/requirements.txt /app/requirements.txt
-RUN pip install --upgrade pip && pip install -r /app/requirements.txt
+RUN python3.11 -m pip install --no-cache-dir -r /app/requirements.txt && \
+    python3.11 -m pip install --no-cache-dir cryptography
 
 COPY enclave /app/enclave
 
-CMD ["python", "/app/enclave/server.py"]
+ENTRYPOINT ["python3.11", "/app/enclave/server.py"]
