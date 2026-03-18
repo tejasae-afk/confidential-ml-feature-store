@@ -1,102 +1,193 @@
 # Confidential ML Feature Store with Hardware-Isolated Inference
 
-A multi-tenant online feature store built with FastAPI and DynamoDB, designed as the foundation for attested, hardware-isolated inference with AWS Nitro Enclaves.
+![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)
 
-![Architecture diagram placeholder](architecture.png)
+A tenant-isolated FastAPI feature store backed by DynamoDB with an enclave-compatible inference path, KMS attestation plumbing, and a local `USE_MOCK_ENCLAVE=true` development mode.
 
 ## Overview
 
-Phase 1 delivers a working feature-store core:
+This repository contains a working multi-tenant feature store and inference service with the following current capabilities:
 
-- tenant-scoped feature-set CRUD over FastAPI
-- tenant authentication via `X-Tenant-ID` and `X-API-Key`
-- strict tenant isolation at the API and service layers
-- DynamoDB-backed persistence with partitioning by `tenant_id`
-- a health endpoint with DynamoDB connectivity checks
-- a test suite that runs fully offline with moto
+- authenticated tenant-scoped feature CRUD
+- DynamoDB storage with `tenant_id` / `resource_id` keying
+- host-side inference orchestration through `POST /inference/`
+- local development inference through `feature_store/services/enclave_client.py::MockEnclaveClient`
+- real enclave transport through `feature_store/services/enclave_client.py::EnclaveClient`
+- in-enclave model loading and prediction through `enclave/inference_engine.py::InferenceEngine`
+- KMS integration for tenant-bound encryption context and attestation-shaped decrypt requests
+- sample encrypted model artifacts under `artifacts/tenant-1/test-model/`
 
-The Nitro Enclaves and KMS integration boundaries remain in the repository and will be expanded in a later phase for confidential inference.
+## Architecture
 
-## Why This Project
+```mermaid
+flowchart LR
+    Client[HTTP Client]
+    App["feature_store/main.py\ncreate_app()"]
+    Auth["feature_store/middleware/tenant_auth.py\nget_current_tenant()"]
+    Features["feature_store/routers/features.py"]
+    Inference["feature_store/routers/inference.py"]
+    FeatureService["feature_store/services/feature_service.py\nFeatureService"]
+    DynamoService["feature_store/services/dynamo_service.py\nDynamoDBService"]
+    Resolver["feature_store/services/enclave_client.py\nget_enclave_client()"]
+    HostClient["feature_store/services/enclave_client.py\nEnclaveClient"]
+    MockClient["feature_store/services/enclave_client.py\nMockEnclaveClient"]
+    ArtifactLoader["feature_store/routers/inference.py\n_load_model_artifacts()"]
+    ModelStore[(MODEL_STORAGE_DIR)]
+    DynamoDB[(DynamoDB)]
+    Server["enclave/server.py\nVsockRPCServer"]
+    Engine["enclave/inference_engine.py\nInferenceEngine"]
+    EnclaveKMS["enclave/kms_client.py\nEnclaveKMSClient"]
+    Attestation["enclave/attestation.py\nget_attestation_document()"]
+    KMS[(AWS KMS)]
 
-Machine learning model weights are valuable intellectual property. In many traditional serving architectures, those weights are loaded into processes that run directly on the host operating system, which means a host compromise can expose model artifacts, decrypted keys, or inference internals.
+    Client --> App
+    App --> Auth
+    Auth --> Features
+    Auth --> Inference
+    Features --> FeatureService --> DynamoService --> DynamoDB
+    Inference --> FeatureService
+    Inference --> ArtifactLoader --> ModelStore
+    Inference --> Resolver
+    Resolver -->|USE_MOCK_ENCLAVE=true| MockClient
+    Resolver -->|USE_MOCK_ENCLAVE=false| HostClient
+    MockClient --> Engine
+    HostClient -->|AF_VSOCK JSON RPC| Server --> Engine --> EnclaveKMS --> Attestation
+    EnclaveKMS --> KMS
+```
 
-This project moves toward a stronger trust boundary:
+For a deeper architectural walkthrough, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-- the host API receives tenant requests and orchestrates feature access
-- DynamoDB stores tenant-scoped online features
-- sensitive inference is intended to run inside an AWS Nitro Enclave
-- AWS KMS access is intended to be gated by enclave attestation measurements
-- the host communicates with the enclave over vsock rather than loading protected model material directly
+## Demo
 
-The result is a feature-store architecture that can support confidential model serving while already enforcing strong tenant ownership at the storage and API layers.
+### Docker running
 
-## Feature List
+![Docker Desktop showing both containers running](docs/screenshots/docker-desktop.png)
 
-- **Tenant-scoped feature CRUD**  
-  Create, read, list, and delete feature sets for the authenticated tenant.
+### Health check
 
-- **Header-based tenant authentication**  
-  Requests must include `X-Tenant-ID` and `X-API-Key`, which are validated against stored tenant records.
+![Health endpoint returning status ok](docs/screenshots/health-check.png)
 
-- **Tenant isolation enforcement**  
-  A tenant cannot read, list, or delete another tenant's feature sets, even if they try to override tenant identifiers in requests.
+### Feature creation
 
-- **DynamoDB-backed persistence**  
-  Feature sets are stored under a composite key of `tenant_id` and `resource_id`.
+![Feature creation request and response](docs/screenshots/curl-endpoints.png)
 
-- **Health and readiness checks**  
-  `/health` reports service version and DynamoDB connectivity.
+### Inference
 
-- **Inference preparation hooks**  
-  The service layer can prepare deterministic feature vectors for the future enclave-backed inference pipeline.
+![Inference request and response](docs/screenshots/curl-endpoints.png)
 
-- **Confidential-computing integration boundary**  
-  Enclave, attestation, KMS, and vsock modules remain in place for the next implementation phase.
+### Test results
 
-## Tech Stack
+![Pytest results showing all tests passing](docs/screenshots/pytest-result.png)
 
-| Tool | Purpose |
-| --- | --- |
-| Python 3.11+ | Application and enclave-side implementation language |
-| FastAPI | Host-side API framework |
-| AWS DynamoDB | Tenant-scoped online feature storage |
-| AWS EC2 with Nitro Enclaves | Hardware-isolated execution environment for sensitive inference |
-| AWS KMS | Attestation-aware decryption and key policy enforcement |
-| vsock RPC | Host-to-enclave communication channel |
-| scikit-learn | Model loading and inference runtime inside the enclave |
-| Docker | Local development and enclave image builds |
-| pytest | Test runner for API and service validation |
-| moto | Offline AWS mocking for test execution |
+### Additional local setup screenshots
+
+![DynamoDB table creation and tenant record insertion](docs/screenshots/dynamodb-setup.png)
+
+![Docker Compose startup with mock enclave local app flow](docs/screenshots/docker-compose-start.png)
 
 ## Quick Start
 
-Local development uses Docker Compose plus DynamoDB Local.
+This quick start uses the current code exactly as it exists today:
 
-### 1. Copy the environment template
+- `docker-compose.yml` for DynamoDB Local
+- `USE_MOCK_ENCLAVE=true` so inference works without a real enclave
+- the bundled encrypted sample model at `artifacts/tenant-1/test-model/`
+
+### 1. Install dependencies
+
+```bash
+make install
+```
+
+### 2. Copy the environment file
 
 ```bash
 cp .env.example .env
 ```
 
-### 2. Start local services
+Recommended local `.env` values:
 
-```bash
-docker compose up --build
+```dotenv
+AWS_REGION=us-east-1
+DYNAMODB_TABLE_NAME=confidential-ml-feature-store
+DYNAMODB_ENDPOINT=http://localhost:8001
+KMS_KEY_ID=local-placeholder-kms-key
+ENCLAVE_CID=16
+ENCLAVE_PORT=5005
+LOG_LEVEL=INFO
+USE_MOCK_ENCLAVE=true
 ```
 
-### 3. Create the local DynamoDB table
+### 3. Start DynamoDB Local
 
-Run the setup script against the host-mapped DynamoDB Local port:
+Use the existing Compose file to start the DynamoDB service:
 
 ```bash
+docker compose up -d dynamodb-local
+```
+
+### 4. Create the DynamoDB table
+
+For local DynamoDB, provide dummy AWS credentials and point the setup script at the mapped port:
+
+```bash
+AWS_ACCESS_KEY_ID=dummy \
+AWS_SECRET_ACCESS_KEY=dummy \
 AWS_REGION=us-east-1 \
 DYNAMODB_TABLE_NAME=confidential-ml-feature-store \
 DYNAMODB_ENDPOINT=http://localhost:8001 \
 ./scripts/setup_dynamodb.sh
 ```
 
-### 4. Verify service health
+### 5. Seed a tenant record
+
+The authenticated routes require a tenant item in DynamoDB.
+
+```bash
+python - <<'PY'
+from datetime import datetime, timezone
+import boto3
+
+table = boto3.resource(
+    "dynamodb",
+    region_name="us-east-1",
+    endpoint_url="http://localhost:8001",
+    aws_access_key_id="dummy",
+    aws_secret_access_key="dummy",
+).Table("confidential-ml-feature-store")
+
+table.put_item(
+    Item={
+        "tenant_id": "tenant-1",
+        "resource_id": "TENANT#tenant-1",
+        "entity_type": "TENANT",
+        "api_key": "test-key-1",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "is_active": True,
+        "allowed_models": ["test-model"],
+    }
+)
+print("Seeded tenant-1")
+PY
+```
+
+### 6. Start the FastAPI application in mock-enclave mode
+
+Use the new Makefile target that matches the current local-development pattern:
+
+```bash
+make run-dev-mock
+```
+
+This expands to:
+
+```bash
+DYNAMODB_ENDPOINT=http://localhost:8001 USE_MOCK_ENCLAVE=true uvicorn feature_store.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 7. Check service health
 
 ```bash
 curl http://localhost:8000/health
@@ -115,115 +206,226 @@ Expected response:
 }
 ```
 
-### 5. Create a tenant-scoped feature set
-
-The API expects a tenant record to exist in DynamoDB. In automated tests, tenants are seeded by fixtures. For local manual testing, seed a tenant record first, then call the API with the corresponding headers.
-
-### 6. Open API docs
-
-```text
-http://localhost:8000/docs
-```
-
-## API Surface
-
-### Working Phase 1 routes
-
-- `GET /health` — service status and DynamoDB connectivity
-- `POST /features/` — create a tenant-owned feature set
-- `GET /features/` — list feature sets for the authenticated tenant
-- `GET /features/{feature_set_name}` — fetch a tenant-owned feature set
-- `DELETE /features/{feature_set_name}` — delete a tenant-owned feature set
-
-### Authentication headers
-
-All feature routes require:
-
-- `X-Tenant-ID`
-- `X-API-Key`
-
-### Example create request
+### 8. Create a feature set
 
 ```bash
 curl -X POST http://localhost:8000/features/ \
+  -H "X-Tenant-ID: tenant-1" \
+  -H "X-API-Key: test-key-1" \
   -H "Content-Type: application/json" \
-  -H "X-Tenant-ID: tenant-a" \
-  -H "X-API-Key: tenant-a-api-key" \
   -d '{
-    "tenant_id": "tenant-a",
-    "feature_set_name": "customer-profile",
+    "tenant_id": "tenant-1",
+    "feature_set_name": "test-features",
     "features": {
-      "age": 34.0,
-      "balance": 1200.5
+      "sepal_length": 5.1,
+      "sepal_width": 3.5,
+      "petal_length": 1.4,
+      "petal_width": 0.2
     }
   }'
 ```
 
+Expected response shape:
+
+```json
+{
+  "tenant_id": "tenant-1",
+  "feature_set_name": "test-features",
+  "features": {
+    "sepal_length": 5.1,
+    "sepal_width": 3.5,
+    "petal_length": 1.4,
+    "petal_width": 0.2
+  },
+  "created_at": "2026-03-18T13:03:36.783871Z",
+  "updated_at": "2026-03-18T13:03:36.783871Z",
+  "version": 1
+}
+```
+
+### 9. Run inference
+
+The repository already contains a sample encrypted model bundle for:
+
+- tenant: `tenant-1`
+- model: `test-model`
+
+Call the current inference endpoint:
+
+```bash
+curl -X POST http://localhost:8000/inference/ \
+  -H "X-Tenant-ID: tenant-1" \
+  -H "X-API-Key: test-key-1" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant_id": "tenant-1",
+    "feature_set_name": "test-features",
+    "model_name": "test-model"
+  }'
+```
+
+Expected response shape:
+
+```json
+{
+  "prediction": 2.0,
+  "confidence": 0.94,
+  "latency_ms": 911.79,
+  "served_from_cache": false
+}
+```
+
+### 10. List available and loaded models
+
+```bash
+curl http://localhost:8000/inference/models \
+  -H "X-Tenant-ID: tenant-1" \
+  -H "X-API-Key: test-key-1"
+```
+
+Expected response:
+
+```json
+{
+  "available_models": ["test-model"],
+  "loaded_models": ["test-model"]
+}
+```
+
+## API Reference
+
+| Method | Path | Auth | Request schema | Response schema |
+| --- | --- | --- | --- | --- |
+| `GET` | `/health` | none | none | `HealthCheckResponse` |
+| `POST` | `/features/` | `X-Tenant-ID`, `X-API-Key` | `FeatureSetCreate` | `FeatureSetResponse` |
+| `GET` | `/features/` | `X-Tenant-ID`, `X-API-Key` | query: `tenant_id` optional | `list[FeatureSetResponse]` |
+| `GET` | `/features/{feature_set_name}` | `X-Tenant-ID`, `X-API-Key` | path: `feature_set_name`, query: `tenant_id` optional | `FeatureSetResponse` |
+| `DELETE` | `/features/{feature_set_name}` | `X-Tenant-ID`, `X-API-Key` | path: `feature_set_name`, query: `tenant_id` optional | `204 No Content` |
+| `POST` | `/inference/` | `X-Tenant-ID`, `X-API-Key` | `InferenceRequest` | `InferenceResponse` |
+| `GET` | `/inference/models` | `X-Tenant-ID`, `X-API-Key` | none | `{"available_models": list[str], "loaded_models": list[str]}` |
+
+### Request and response schemas
+
+#### `FeatureSetCreate`
+
+```json
+{
+  "tenant_id": "string",
+  "feature_set_name": "string",
+  "features": {
+    "feature_name": 0.123
+  }
+}
+```
+
+#### `FeatureSetResponse`
+
+```json
+{
+  "tenant_id": "string",
+  "feature_set_name": "string",
+  "features": {
+    "feature_name": 0.123
+  },
+  "created_at": "datetime",
+  "updated_at": "datetime",
+  "version": 1
+}
+```
+
+#### `InferenceRequest`
+
+```json
+{
+  "tenant_id": "string",
+  "feature_set_name": "string",
+  "model_name": "string"
+}
+```
+
+#### `InferenceResponse`
+
+```json
+{
+  "prediction": 0.0,
+  "confidence": 0.95,
+  "latency_ms": 12.3,
+  "served_from_cache": false
+}
+```
+
+#### Error response envelope
+
+```json
+{
+  "error": "string",
+  "detail": "string",
+  "request_id": "string | null",
+  "timestamp": "iso8601 datetime"
+}
+```
+
+## Performance Notes
+
+The current implementation exposes several useful performance properties:
+
+- `feature_store/routers/inference.py::run_inference()` logs:
+  - `dynamodb_ms`
+  - `enclave_round_trip_ms`
+  - `enclave_compute_ms`
+  - `total_ms`
+- `enclave/inference_engine.py::InferenceEngine` caches loaded models in memory with LRU eviction
+- `enclave/kms_client.py::EnclaveKMSClient` caches decrypted keys with a TTL
+- the first request for a model is slower because it loads, decrypts, and deserializes the model
+- subsequent requests may return `served_from_cache=true`
+
+## Security
+
+This project is designed around tenant isolation and confidential inference primitives.
+
+Current security controls include:
+
+- tenant authentication through `X-Tenant-ID` and `X-API-Key`
+- tenant ownership enforcement in `feature_store/services/feature_service.py::FeatureService`
+- DynamoDB partitioning by `tenant_id`
+- model artifact encryption and KMS encryption context
+- Nitro Enclave attestation helpers for PCR-bound KMS decrypt policies
+
+See [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) for the full threat model and design assumptions.
+
 ## AWS Deployment
 
-Deployment and environment preparation steps are documented in [docs/SETUP_AWS.md](docs/SETUP_AWS.md).
+For step-by-step deployment instructions, see [docs/SETUP_AWS.md](docs/SETUP_AWS.md).
 
 That guide covers:
 
-- parent instance preparation for Nitro Enclaves
-- enclave image builds and PCR capture
-- KMS key policy setup for attested decrypt flows
-- DynamoDB table creation using the Phase 1 schema
-- host API startup and validation
+- launching a Nitro-enabled EC2 parent instance
+- installing the Nitro Enclaves CLI
+- configuring the allocator
+- building the EIF with `scripts/build_enclave.sh`
+- creating the PCR-bound KMS key with `scripts/setup_kms.sh`
+- running the enclave with `scripts/run_enclave.sh`
+- training and deploying models with `scripts/train_model.py`
 
-## Security Model
-
-A summarized security model is available in [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md).
-
-At a high level, the current implementation already enforces:
-
-- API-key-based tenant authentication
-- strict tenant ownership checks before all feature operations
-- tenant partitioning in DynamoDB
-- denial of cross-tenant read, list, and delete attempts
-
-The next phase extends that foundation into enclave-backed inference and attestation-aware cryptographic access.
-
-## Testing
-
-Run the full test suite with:
-
-```bash
-make test
-```
-
-Run linting and type checks with:
-
-```bash
-make lint
-```
-
-The Phase 1 test suite covers:
-
-- feature-set create, read, list, and delete behavior
-- tenant isolation enforcement
-- invalid API key rejection
-- missing-header rejection
-- cross-tenant attack attempts against read, list, and delete paths
-- health endpoint behavior under a moto-backed DynamoDB table
-
-Tests run without external AWS dependencies by using moto to mock DynamoDB.
-
-## Project Structure
+## Repository Layout
 
 ```text
 confidential-ml-feature-store/
 ├── README.md
+├── CONTRIBUTING.md
 ├── LICENSE
-├── .gitignore
 ├── .env.example
-├── architecture.png
+├── docker-compose.yml
+├── Makefile
+├── pyproject.toml
+├── requirements.txt
 ├── docs/
-│   ├── SETUP_AWS.md
 │   ├── ARCHITECTURE.md
-│   └── SECURITY_MODEL.md
+│   ├── SECURITY_MODEL.md
+│   ├── SETUP_AWS.md
+│   └── screenshots/
+│       └── README.md
 ├── feature_store/
-│   ├── __init__.py
 │   ├── main.py
 │   ├── config.py
 │   ├── models/
@@ -232,31 +434,36 @@ confidential-ml-feature-store/
 │   ├── middleware/
 │   └── utils/
 ├── enclave/
-│   ├── Dockerfile.enclave
 │   ├── server.py
 │   ├── inference_engine.py
-│   ├── attestation.py
 │   ├── kms_client.py
-│   └── requirements.txt
+│   ├── attestation.py
+│   └── Dockerfile.enclave
 ├── scripts/
 │   ├── build_enclave.sh
 │   ├── run_enclave.sh
 │   ├── setup_dynamodb.sh
 │   ├── setup_kms.sh
 │   └── train_model.py
-├── tests/
-│   ├── conftest.py
-│   ├── test_feature_store.py
-│   ├── test_kms_attestation.py
-│   ├── test_enclave_client.py
-│   ├── test_inference.py
-│   └── test_tenant_isolation.py
-├── docker-compose.yml
-├── Makefile
-├── pyproject.toml
-└── requirements.txt
+└── tests/
+    ├── conftest.py
+    ├── test_feature_store.py
+    ├── test_inference.py
+    ├── test_enclave_client.py
+    ├── test_kms_attestation.py
+    └── test_tenant_isolation.py
 ```
+
+## Built With
+
+- [FastAPI](https://fastapi.tiangolo.com/) for the HTTP API
+- `boto3` for DynamoDB and KMS integrations
+- `pydantic` and `pydantic-settings` for validation and settings
+- `scikit-learn` and `joblib` for model serialization and inference
+- `cryptography` for AES-GCM envelope encryption
+- AWS Nitro Enclaves for the confidential inference target architecture
+- `pytest` and `moto` for local, AWS-free test execution
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE).
+This repository is licensed under the MIT License. See [LICENSE](LICENSE).
