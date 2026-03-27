@@ -69,7 +69,7 @@ measurements.json
 
 # Model and artifact outputs
 artifacts/
-models/
+/models/
 *.joblib
 *.pkl
 *.pickle
