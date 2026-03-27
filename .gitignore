@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+*.pyc
 *.py[cod]
 *$py.class
 *.so
@@ -95,6 +96,7 @@ Desktop.ini
 .ipynb_checkpoints/
 
 # Misc
+/tmp
 tmp/
 temp/
 .cache/

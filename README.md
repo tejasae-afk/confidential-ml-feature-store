@@ -1,8 +1,11 @@
+<!-- TODO: Update the repository description in GitHub Settings (repo page → Edit → Description).
+     Current description still says "scaffold" — change it to reflect what the project actually does. -->
+
 # Confidential ML Feature Store with Hardware-Isolated Inference
 
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)
+[![CI](https://github.com/tejasae-afk/confidential-ml-feature-store/actions/workflows/ci.yml/badge.svg)](https://github.com/tejasae-afk/confidential-ml-feature-store/actions/workflows/ci.yml)
 
 A tenant-isolated FastAPI feature store backed by DynamoDB with an enclave-compatible inference path, KMS attestation plumbing, and a local `USE_MOCK_ENCLAVE=true` development mode.
 
