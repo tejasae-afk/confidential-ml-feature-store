@@ -40,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--kms-key-id",
-        default=os.getenv("KMS_KEY_ID", "local-placeholder-kms-key"),
+        default=os.getenv("KMS_KEY_ID", "arn:aws:kms:us-east-1:123456789012:key/mrk-a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"),
         help="AWS KMS key ID or ARN.",
     )
     parser.add_argument(
