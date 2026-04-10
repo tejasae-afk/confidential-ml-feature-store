@@ -34,7 +34,7 @@ class Settings(BaseSettings):
         alias="DYNAMODB_TABLE_NAME",
     )
     dynamodb_endpoint: str | None = Field(default=None, alias="DYNAMODB_ENDPOINT")
-    kms_key_id: str = Field(default="placeholder-kms-key", alias="KMS_KEY_ID")
+    kms_key_id: str = Field(default="arn:aws:kms:us-east-1:123456789012:key/mrk-a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6", alias="KMS_KEY_ID")
     enclave_cid: int = Field(default=16, alias="ENCLAVE_CID")
     enclave_port: int = Field(default=5005, alias="ENCLAVE_PORT")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
