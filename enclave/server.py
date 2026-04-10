@@ -375,7 +375,7 @@ def _create_inference_engine() -> InferenceEngine:
     Returns:
         A configured ``InferenceEngine`` instance.
     """
-    key_id = os.getenv("KMS_KEY_ID", "arn:aws:kms:us-east-1:123456789012:key/mrk-a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6")
+    key_id = os.getenv("KMS_KEY_ID", "arn:aws:kms:us-east-1:749382610573:key/mrk-f3c9e2b741d865a0f4821c3d096e57b8")
     region = os.getenv("AWS_REGION", "us-east-1")
     kms_proxy_port = int(os.getenv("KMS_PROXY_PORT", "8000"))
     kms_proxy_cid = int(os.getenv("KMS_PROXY_CID", "3"))
