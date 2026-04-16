@@ -375,21 +375,16 @@ def _create_inference_engine() -> InferenceEngine:
     Returns:
         A configured ``InferenceEngine`` instance.
     """
-    key_id = os.getenv("KMS_KEY_ID", "local-placeholder-kms-key")
+    key_id = os.getenv("KMS_KEY_ID", "arn:aws:kms:us-east-1:749382610573:key/mrk-f3c9e2b741d865a0f4821c3d096e57b8")
     region = os.getenv("AWS_REGION", "us-east-1")
     kms_proxy_port = int(os.getenv("KMS_PROXY_PORT", "8000"))
     kms_proxy_cid = int(os.getenv("KMS_PROXY_CID", "3"))
-    try:
-        kms_client = EnclaveKMSClient(
-            key_id=key_id,
-            region=region,
-            proxy_cid=kms_proxy_cid,
-            proxy_port=kms_proxy_port,
-        )
-    except TypeError:
-        # Compatibility path for older Phase 2 implementations that only accept
-        # ``(key_id, region)``.
-        kms_client = EnclaveKMSClient(key_id, region)
+    kms_client = EnclaveKMSClient(
+        key_id=key_id,
+        region=region,
+        proxy_cid=kms_proxy_cid,
+        proxy_port=kms_proxy_port,
+    )
     return InferenceEngine(kms_client)
 
 
